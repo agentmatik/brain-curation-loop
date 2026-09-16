@@ -1,0 +1,322 @@
+{
+  "name": "Brain curation loop - PR approval in Slack",
+  "active": false,
+  "nodes": [
+    {
+      "id": "sum",
+      "name": "Sticky: Workflow Summary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        60
+      ],
+      "parameters": {
+        "content": "# Brain curation loop - PR approval in Slack\n\nGitHub `pull_request` webhook on your brain repo filters `bot/*` PRs (the curator opens these for SENSITIVE changes) and posts an Approve / Reject card to a Slack channel.\n\nClicks come back through the Slack Action Webhook and squash-merge or comment-and-close the PR through the GitHub API.\n\nSetup: docs/setup.md in the repo. Replace REPLACE_WITH_* placeholders, pick your Slack credential on the Slack node, register both webhook URLs (GitHub repo webhook, Slack app interactivity).",
+        "color": 5,
+        "width": 460,
+        "height": 260
+      }
+    },
+    {
+      "id": "frame1",
+      "name": "Frame: PR Event → Slack",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        180
+      ],
+      "parameters": {
+        "content": "# PR Event → Slack approval message",
+        "color": 6,
+        "width": 900,
+        "height": 260
+      }
+    },
+    {
+      "id": "frame2",
+      "name": "Frame: Slack Click → Merge/Close",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        520
+      ],
+      "parameters": {
+        "content": "# Slack Click → Merge or Close on GitHub",
+        "color": 2,
+        "width": 1180,
+        "height": 260
+      }
+    },
+    {
+      "id": "pr-webhook",
+      "name": "GitHub PR Events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "path": "brain-pr-events",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "noData"
+      },
+      "webhookId": "59258c5d-ae28-4005-b23b-733d075573bc"
+    },
+    {
+      "id": "check-bot",
+      "name": "Check: Bot PR Opened?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "bot-pr-1",
+              "leftValue": "={{ $json.body.action === 'opened' && (($json.body.pull_request && $json.body.pull_request.head && $json.body.pull_request.head.ref) || '').startsWith('bot/') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fmt-blocks",
+      "name": "Format Approval Blocks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Slack Block Kit approval message for a sensitive bot/* PR.\nconst pr = $('GitHub PR Events').first().json.body.pull_request;\nconst title = pr.title || 'Brain update';\nlet body = String(pr.body || '').trim();\nif (body.length > 900) body = body.substring(0, 900) + '…';\nconst value = JSON.stringify({ pr: pr.number });\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: 'Brain update — approval needed', emoji: true } },\n  { type: 'section', text: { type: 'mrkdwn', text: '*' + title + '*\\n' + (body || '_no description_') } },\n  { type: 'context', elements: [{ type: 'mrkdwn', text: 'PR #' + pr.number + ' · <' + pr.html_url + '|view diff>' }] },\n  { type: 'actions', elements: [\n    { type: 'button', style: 'primary', text: { type: 'plain_text', text: '✅ Approve & Merge' }, action_id: 'ssot_approve', value },\n    { type: 'button', style: 'danger', text: { type: 'plain_text', text: '❌ Reject' }, action_id: 'ssot_reject', value }\n  ] }\n];\nreturn [{ json: { blocks_json: JSON.stringify({ blocks: blocks }), fallback_text: 'Brain update: ' + title + ' (PR #' + pr.number + ')' } }];\n"
+      }
+    },
+    {
+      "id": "post-slack",
+      "name": "Post Approval to Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        300
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SLACK_CHANNEL_ID",
+          "mode": "id"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocks_json }}",
+        "text": "={{ $json.fallback_text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        },
+        "authentication": "accessToken"
+      },
+      "webhookId": "861c0c9c-04d0-4304-ae5d-0be7874a9426"
+    },
+    {
+      "id": "slack-webhook",
+      "name": "Slack Action Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        640
+      ],
+      "parameters": {
+        "path": "brain-approval-action",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "responseData": "noData"
+      },
+      "webhookId": "c01e3a81-9afd-491e-8d8e-0a1761f8fd76"
+    },
+    {
+      "id": "parse-action",
+      "name": "Parse Slack Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        640
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Slack interactivity payloads arrive as form-encoded: body.payload = JSON string.\nconst raw = $json.body && $json.body.payload;\nif (!raw) return [];\nconst p = typeof raw === 'string' ? JSON.parse(raw) : raw;\nconst action = (p.actions && p.actions[0]) || {};\nlet prNumber = null;\ntry { prNumber = JSON.parse(action.value || '{}').pr; } catch (e) {}\nif (!prNumber) return [];\nreturn [{ json: {\n  action_id: action.action_id,\n  pr_number: prNumber,\n  response_url: p.response_url,\n  clicked_by: (p.user && (p.user.name || p.user.username)) || 'unknown'\n} }];\n"
+      }
+    },
+    {
+      "id": "if-action",
+      "name": "Approve or Reject?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        640
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "act-1",
+              "leftValue": "={{ $json.action_id }}",
+              "rightValue": "ssot_approve",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-pr",
+      "name": "Merge PR (GitHub)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        580
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Approve path: squash-merge the bot PR, then update the Slack message.\nconst d = $json;\nconst token = 'REPLACE_WITH_GITHUB_TOKEN';\nconst repoApi = 'https://api.github.com/repos/OWNER/REPO';\nconst gh = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github.v3+json' };\nlet resultText;\ntry {\n  await this.helpers.httpRequest({ method: 'PUT', url: repoApi + '/pulls/' + d.pr_number + '/merge', headers: gh, body: { merge_method: 'squash' } });\n  resultText = ':white_check_mark: *Approved & merged* PR #' + d.pr_number + ' · by ' + d.clicked_by;\n} catch (err) {\n  resultText = ':warning: Merge of PR #' + d.pr_number + ' failed: ' + err.message + ' — handle it directly on GitHub.';\n}\ntry {\n  await this.helpers.httpRequest({ method: 'POST', url: d.response_url, body: { replace_original: true, text: resultText } });\n} catch (e) {}\nreturn [{ json: { ...d, result: resultText } }];\n"
+      }
+    },
+    {
+      "id": "close-pr",
+      "name": "Close PR (GitHub)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        700
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Reject path: comment + close the bot PR, then update the Slack message.\nconst d = $json;\nconst token = 'REPLACE_WITH_GITHUB_TOKEN';\nconst repoApi = 'https://api.github.com/repos/OWNER/REPO';\nconst gh = { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github.v3+json' };\nlet resultText;\ntry {\n  await this.helpers.httpRequest({ method: 'POST', url: repoApi + '/issues/' + d.pr_number + '/comments', headers: gh, body: { body: 'Rejected via Slack by ' + d.clicked_by + '. Closing without merge.' } });\n  await this.helpers.httpRequest({ method: 'PATCH', url: repoApi + '/pulls/' + d.pr_number, headers: gh, body: { state: 'closed' } });\n  resultText = ':x: *Rejected* PR #' + d.pr_number + ' · by ' + d.clicked_by;\n} catch (err) {\n  resultText = ':warning: Reject of PR #' + d.pr_number + ' failed: ' + err.message + ' — handle it directly on GitHub.';\n}\ntry {\n  await this.helpers.httpRequest({ method: 'POST', url: d.response_url, body: { replace_original: true, text: resultText } });\n} catch (e) {}\nreturn [{ json: { ...d, result: resultText } }];\n"
+      }
+    }
+  ],
+  "connections": {
+    "GitHub PR Events": {
+      "main": [
+        [
+          {
+            "node": "Check: Bot PR Opened?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check: Bot PR Opened?": {
+      "main": [
+        [
+          {
+            "node": "Format Approval Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Approval Blocks": {
+      "main": [
+        [
+          {
+            "node": "Post Approval to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Action Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Slack Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Slack Action": {
+      "main": [
+        [
+          {
+            "node": "Approve or Reject?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve or Reject?": {
+      "main": [
+        [
+          {
+            "node": "Merge PR (GitHub)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Close PR (GitHub)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
