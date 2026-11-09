@@ -1,5 +1,7 @@
 # brain-curation-loop
 
+[![License](https://img.shields.io/github/license/agentmatik/brain-curation-loop)](https://github.com/agentmatik/brain-curation-loop/blob/main/LICENSE) ![Last commit](https://img.shields.io/github/last-commit/agentmatik/brain-curation-loop?label=updated) ![human approves anything sensitive](https://img.shields.io/badge/human%20approves%20anything%20sensitive-2ea043) ![in production since Jul 2026](https://img.shields.io/badge/in%20production%20since%20Jul%202026-2ea043) [![CI](https://github.com/agentmatik/brain-curation-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/agentmatik/brain-curation-loop/actions/workflows/ci.yml)
+
 Meetings in, a curated company brain out, with a human approving anything sensitive.
 
 A company brain is a git repo of Markdown that AI agents read and update: one file per customer, competitor, supplier, person, decision and meeting, in the [template-intelligence](https://github.com/agentmatik/template-intelligence) layout. This repo is the loop that keeps such a brain current without a person typing into it, and without an agent ever changing what the company *is* on its own.
